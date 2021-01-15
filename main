@@ -1,0 +1,267 @@
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse,verbose=FALSE)    
+library(Rlab)  
+library(caret)
+library(adabag)
+library(randomForest,verbose=FALSE)
+library(dplyr)
+library(Amelia)
+library(mice)
+library(data.table)
+library(magrittr)
+require(lattice)
+library(caret)
+library(xgboost)
+library(e1071)
+set.seed(7879) #big prime number
+# ---------------------------------------------------
+
+#tmp=md.pattern(data)
+data = read.csv("/Users/sabadaftari/Downloads/train_student.csv")
+test = read.csv("/Users/sabadaftari/Downloads/score_student_withID.csv")
+# -------------------only promo false----------------------
+
+data = data %>% filter(promo == "False")
+test = test %>% filter(promo == "False")
+str(test)
+
+#r= subset(test, select = c("id","unique_family"))
+#data = tesmerge(data,r, by=c("id"))
+
+# -------------------discarding variables----------------------
+data = subset(data, select = -c(time_since_voice_overage)) #too much missing values
+test = subset(test, select = -c(time_since_voice_overage))
+# ---------------------cleaning factors -----------------------
+
+data$active = as.integer(as.factor(data$active))
+data$workphone = as.integer(as.factor(data$workphone))
+data$unlimited_voice = as.integer(as.factor(data$unlimited_voice))
+data$plan_type = as.numeric(as.factor(data$plan_type))
+data$gender = as.numeric(as.factor(data$gender))
+
+test$active = as.integer(as.factor(test$active))
+test$workphone = as.integer(as.factor(test$workphone))
+test$unlimited_voice = as.integer(as.factor(test$unlimited_voice))
+test$plan_type = as.numeric(as.factor(test$plan_type))
+test$gender = as.numeric(as.factor(test$gender))
+
+#===== missing values
+trainID=sample(1:860000,588000)         
+train=data[trainID,]
+valid=data[-trainID,]
+
+train["time_since_data_overage_missing"] = 0
+train["time_since_overage_missing"] = 0
+train["time_since_complaints_missing"] = 0
+train["time_since_technical_problems_missing"] = 0
+
+
+train$time_since_data_overage_missing[train$time_since_data_overage == TRUE] <- 1  
+train$time_since_overage_missing[train$time_since_overage == TRUE] <- 1  
+train$time_since_complaints_missing[train$time_since_complaints == TRUE] <- 1  
+train$time_since_technical_problems_missing[train$time_since_technical_problems == TRUE] <- 1  
+
+
+train = train %>%
+  mutate(time_since_data_overage
+         = replace(time_since_data_overage,
+                   is.na(time_since_data_overage),
+                   mean(time_since_data_overage, na.rm = TRUE)))
+train = train %>%
+  mutate(time_since_overage
+         = replace(time_since_overage,
+                   is.na(time_since_overage),
+                   mean(time_since_overage, na.rm = TRUE)))
+train = train %>%
+  mutate(time_since_complaints
+         = replace(time_since_complaints,
+                   is.na(time_since_complaints),
+                   median(time_since_complaints, na.rm = TRUE)))
+train = train %>%
+  mutate(time_since_technical_problems
+         = replace(time_since_technical_problems,
+                   is.na(time_since_technical_problems),
+                   mean(time_since_technical_problems, na.rm = TRUE)))
+
+
+#validation set
+
+valid["time_since_data_overage_missing"] = 0
+valid["time_since_overage_missing"] = 0
+valid["time_since_complaints_missing"] = 0
+valid["time_since_technical_problems_missing"] = 0
+
+
+valid$time_since_data_overage_missing[valid$time_since_data_overage == TRUE] <- 1  
+valid$time_since_overage_missing[valid$time_since_overage == TRUE] <- 1  
+valid$time_since_complaints_missing[valid$time_since_complaints == TRUE] <- 1  
+valid$time_since_technical_problems_missing[valid$time_since_technical_problems == TRUE] <- 1  
+
+
+valid = valid %>%
+  mutate(time_since_data_overage
+         = replace(time_since_data_overage,
+                   is.na(time_since_data_overage),
+                   mean(time_since_data_overage, na.rm = TRUE)))
+valid = valid %>%
+  mutate(time_since_overage
+         = replace(time_since_overage,
+                   is.na(time_since_overage),
+                   mean(time_since_overage, na.rm = TRUE)))
+valid = valid %>%
+  mutate(time_since_complaints
+         = replace(time_since_complaints,
+                   is.na(time_since_complaints),
+                   median(time_since_complaints, na.rm = TRUE)))
+valid = valid %>%
+  mutate(time_since_technical_problems
+         = replace(time_since_technical_problems,
+                   is.na(time_since_technical_problems),
+                   mean(time_since_technical_problems, na.rm = TRUE)))
+
+library(missForest)
+imp_res <- missForest(train)
+nhanes_imp  <- imp_res$ximp
+nhanes_imp %>% is.na() %>% colSums()
+imp_res$OOBerror
+
+models=lapply(paste(names(train),"~.-id-family_id-churn_in_12-unique_id-promo-voice_minutes"),as.formula)
+imputation_tree=lapply(models,rpart,data=train)
+
+for(i in c(6,33)){
+  train[[i]][is.na(train[[i]])]=predict(imputation_tree[[i]],newdata=train[is.na(train[[i]]),],type="vector")
+  valid[[i]][is.na(valid[[i]])]=predict(imputation_tree[[i]],newdata=valid[is.na(valid[[i]]),],type="vector")
+  #test[[i]][is.na(test[[i]])]=predict(imputation_tree[[i]],newdata=test[is.na(test[[i]]),],type="vector")
+}
+
+write.csv(train,"/Users/sabad/Downloads/CreditGameData/Train1.csv", row.names = FALSE)
+write.csv(valid,"/Users/sabad/Downloads/CreditGameData/Valid1.csv", row.names = FALSE)
+write.csv(test,"/Users/sabad/Downloads/CreditGameData/Test1.csv", row.names = FALSE)
+#---------------missForest--------------
+
+library(missForest)
+registerDoParallel(cores=4)
+imp_res <- missForest(train,parallelize = "forests")
+nhanes_imp  <- imp_res$ximp
+nhanes_imp %>% is.na() %>% colSums()
+imp_res$OOBerror
+
+imp_res <- missForest(train, variablewise = TRUE, parallelize = "variables")
+imp_res$OOBerror
+
+write.csv(imp_res$ximp,"/Users/sabad/Downloads/CreditGameData/TrainrfnoNA14000.csv", row.names = FALSE)
+
+library(missForest)
+registerDoParallel(cores=4)
+imputed = read.csv("/Users/sabad/Downloads/CreditGameData/TrainrfnoNA14000.csv")
+#split the data
+training.sample <- imputed$churn_in_12 %>% createDataPartition(p=0.8, list=FALSE)
+valid <- imputed[-training.sample,]
+train <- imputed[training.sample,]
+
+
+dataforimp = subset(train, select = c(id,family_id,unique_id,total_technical_problems,phone_balance,
+                                      plan_type,base_monthly_rate_phone,total_complaints,total_voice_consumption,
+                                      total_data_consumption,complaints,text_consumption,
+                                      base_monthly_rate_plan,data_consumption,data,total_text_consumption))
+
+str(dataforimp)
+# -------------------imputation mice----------------------
+#install.packages(mice')
+library(mice)
+require(parallel)
+detectCores()
+cl <- parallel::makeCluster(detectCores())
+doParallel::registerDoParallel(cl)
+
+tempData <- mice(data = dataforimp,m=1,maxit=40,method='cart',seed=435)
+parmice(seed=,)
+densityplot(tempData)
+#tempData <- parlmice(data = dataforimp,m=2,maxit=50,meth='pmm',cluster.seed=245435,n.core =4, n.imp.core = 2)
+
+completedData <- complete(tempData)
+dataforimp$phone_price = completedData$phone_price
+
+
+write.csv(dataforimp,"/Users/sabadaftari/Downloads/completedTrain.csv", row.names = FALSE)
+
+completedData = read.csv("/Users/sabadaftari/Downloads/completedTrain.csv")
+summary(completedData)
+train$phone_price = completedData$phone_price
+write.csv(train,"/Users/sabadaftari/Downloads/completedTrainn.csv", row.names = FALSE)
+
+# -------------------Train Imputation----------------------
+completedData$churn_in_12 = as.factor(completedData$churn_in_12)
+valid$churn_in_12 = as.factor(valid$churn_in_12)
+summary(trainforimp)
+
+test = read.csv("/Users/sabadaftari/Downloads/completedTest.csv")
+
+trControl <- trainControl(method = "cv",
+                          number = 5,
+                          search = "grid")
+tuneGrid <- expand.grid(.mtry = 2)
+bow <- train(churn_in_12~total_technical_problems+
+               plan_type+base_monthly_rate_phone+total_complaints+
+               total_voice_consumption+total_data_consumption+
+               complaints+text_consumption+base_monthly_rate_plan+
+               data_consumption+data+total_text_consumption
+             ,data=dataforimp,
+             method = "rf",
+             metric = "Accuracy",
+             tuneGrid = tuneGrid,
+             trControl = trControl,
+             importance = TRUE,
+             nodesize = 2,
+             ntree = 250,
+             maxnodes = 12)
+#gbm
+
+fitControl <- trainControl(method = "repeatedcv", number = 2, repeats = 2)
+tic()
+set.seed(42)
+gbm_model_voters <- train(churn_in_12 ~ .-id-unique_id-family_id,data = dataforimp,
+                          method = "gbm",
+                          trControl = fitControl,
+                          verbose = FALSE)
+dataforimp$unique_id = is.factor(dataforimp$unique_id)
+pbow=predict(gbm_model_voters ,test,type='prob')[,2]
+pbow
+#--------------------- Valid Imputation---------------------
+valid= subset(valid,select = c(id,family_id,unique_id,total_technical_problems,phone_balance,churn_in_12,
+                               plan_type,base_monthly_rate_phone,total_complaints,total_voice_consumption,
+                               phone_price,total_data_consumption,complaints,text_consumption,
+                               base_monthly_rate_plan,data_consumption,data,total_text_consumption))
+tempValid <- mice(data = valid,
+                  pred=quickpred(valid,
+                                 include= c('total_technical_problems',
+                                            'total_complaints','complaints','text_consumption',
+                                            'total_voice_consumption','phone_price','total_data_consumption',
+                                            'data_consumption','data','total_text_consumption'),
+                                 exclude= c('id', 'family_id','unique_id','plan_type','base_monthly_rate_plan'
+                                            ,'churn_in_12','base_monthly_rate_phone')),m=2,maxit=100,meth='pmm',seed=435)
+completedValid <- complete(tempValid,2)
+densityplot(tempValid)
+write.csv(completedValid,"/Users/sabadaftari/Downloads/completedValid.csv", row.names = FALSE)
+
+pboww=predict(bow,completedValid,type = 'prob')
+confusion(completedValid$churn_in_12,predict(bow,completedValid))
+pboww
+
+#--------------------- Test Imputation---------------------
+
+testt= subset(test,select = c(id,family_id,unique_id,unique_family,total_technical_problems,phone_balance,
+                              plan_type,base_monthly_rate_phone,total_complaints,total_voice_consumption,
+                              phone_price,total_data_consumption,complaints,text_consumption,
+                              base_monthly_rate_plan,data_consumption,data,total_text_consumption))
+tempTest <- mice(data = testt,m=1,maxit=10,meth='pmm',seed=435)
+completedTest <- complete(tempTest)
+test$phone_price = completedTest$phone_price
+densityplot(tempTest)
+write.csv(test,"/Users/sabadaftari/Downloads/completedTest.csv", row.names = FALSE)
+str(completedTest)
+
+
+export3 = cbind(p,completedTest)[sort.list(p,decreasing=TRUE),]
+export3 = slice_head(export3,n = 3/10 * 1000000)
+write.csv(export3[c("unique_family")],"/Users/sabad/Downloads/CreditGameData/CreditGame.csv", row.names = FALSE)
