@@ -1,17 +1,9 @@
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse,verbose=FALSE)    
-library(Rlab)  
-library(caret)
-library(adabag)
 library(randomForest,verbose=FALSE)
 library(dplyr)
 library(Amelia)
 library(mice)
-library(data.table)
-library(magrittr)
-require(lattice)
-library(caret)
-library(xgboost)
 library(e1071)
 set.seed(7879) #big prime number
 # ---------------------------------------------------
@@ -118,13 +110,14 @@ valid = valid %>%
          = replace(time_since_technical_problems,
                    is.na(time_since_technical_problems),
                    mean(time_since_technical_problems, na.rm = TRUE)))
-
+#============== multiple imputation with miss Forest=====
 library(missForest)
-imp_res <- missForest(train)
-nhanes_imp  <- imp_res$ximp
-nhanes_imp %>% is.na() %>% colSums()
+imputed <- missForest(train)
+imputed_imp  <- imputed$ximp
+imputed_imp %>% is.na() %>% colSums()
 imp_res$OOBerror
 
+#============== multiple imputation with rpart =====
 models=lapply(paste(names(train),"~.-id-family_id-churn_in_12-unique_id-promo-voice_minutes"),as.formula)
 imputation_tree=lapply(models,rpart,data=train)
 
