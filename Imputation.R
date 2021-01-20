@@ -16,100 +16,131 @@ test = read.csv("/Users/sabadaftari/Downloads/score_student_withID.csv")
 data = data %>% filter(promo == "False")
 test = test %>% filter(promo == "False")
 str(test)
-
-#r= subset(test, select = c("id","unique_family"))
-#data = tesmerge(data,r, by=c("id"))
-
+str(data)
 # -------------------discarding variables----------------------
 data = subset(data, select = -c(time_since_voice_overage)) #too much missing values
 test = subset(test, select = -c(time_since_voice_overage))
 # ---------------------cleaning factors -----------------------
 
-data$active = as.integer(as.factor(data$active))
-data$workphone = as.integer(as.factor(data$workphone))
-data$unlimited_voice = as.integer(as.factor(data$unlimited_voice))
-data$plan_type = as.numeric(as.factor(data$plan_type))
-data$gender = as.numeric(as.factor(data$gender))
+test$active =as.factor(test$active)
 
-test$active = as.integer(as.factor(test$active))
-test$workphone = as.integer(as.factor(test$workphone))
-test$unlimited_voice = as.integer(as.factor(test$unlimited_voice))
-test$plan_type = as.numeric(as.factor(test$plan_type))
-test$gender = as.numeric(as.factor(test$gender))
+data$plan_type = as.factor(data$plan_type)
+data$gender = as.integer(as.factor(data$gender))
 
+test$plan_type =as.factor(test$plan_type)
+test$gender = as.integer(as.factor(test$gender))
+
+data["plan_type_bring"] = 0 #one-hot encoding
+data["plan_type_buy"] = 0
+data["plan_type_rent"] = 0
+data["time_since_data_overage_missing"] = 0
+data["time_since_overage_missing"] = 0
+data["time_since_complaints_missing"] = 0
+data["time_since_technical_problems_missing"] = 0
+
+test["plan_type_bring"] = 0 #one-hot encoding
+test["plan_type_buy"] = 0
+test["plan_type_rent"] = 0
+test["time_since_data_overage_missing"] = 0
+test["time_since_overage_missing"] = 0
+test["time_since_complaints_missing"] = 0
+test["time_since_technical_problems_missing"] = 0
+
+data$plan_type_bring[data$plan_type == 'bring'] <- 1  
+data$plan_type_buy[data$plan_type == 'buy'] <- 1 
+data$plan_type_rent[data$plan_type == 'rent'] <- 1 
+data$time_since_data_overage_missing[data$time_since_data_overage == TRUE] <- 1  
+data$time_since_overage_missing[data$time_since_overage == TRUE] <- 1  
+data$time_since_complaints_missing[data$time_since_complaints == TRUE] <- 1  
+data$time_since_technical_problems_missing[data$time_since_technical_problems == TRUE] <- 1 
+
+test$plan_type_bring[test$plan_type == 'bring'] <- 1  
+test$plan_type_buy[test$plan_type == 'buy'] <- 1 
+test$plan_type_rent[test$plan_type == 'rent'] <- 1 
+test$time_since_data_overage_missing[test$time_since_data_overage == TRUE] <- 1  
+test$time_since_overage_missing[test$time_since_overage == TRUE] <- 1  
+test$time_since_complaints_missing[test$time_since_complaints == TRUE] <- 1  
+test$time_since_technical_problems_missing[test$time_since_technical_problems == TRUE] <- 1 
 #===== missing values
+data = data %>%
+  mutate(time_since_data_overage
+         = replace(time_since_data_overage,
+                   is.na(time_since_data_overage),
+                   120)) #120 a value outside of the range
+data = data %>%
+  mutate(time_since_overage
+         = replace(time_since_overage,
+                   is.na(time_since_overage),
+                   120))
+data = data %>%
+  mutate(time_since_complaints
+         = replace(time_since_complaints,
+                   is.na(time_since_complaints),
+                   80)) #80 a value outside of the range
+data = data %>%
+  mutate(time_since_technical_problems
+         = replace(time_since_technical_problems,
+                   is.na(time_since_technical_problems),
+                   80))
+#test set
+test = test %>%
+  mutate(time_since_data_overage
+         = replace(time_since_data_overage,
+                   is.na(time_since_data_overage),
+                   120))
+test = test %>%
+  mutate(time_since_overage
+         = replace(time_since_overage,
+                   is.na(time_since_overage),
+                   120))
+test = test %>%
+  mutate(time_since_complaints
+         = replace(time_since_complaints,
+                   is.na(time_since_complaints),
+                   80))
+test = test %>%
+  mutate(time_since_technical_problems
+         = replace(time_since_technical_problems,
+                   is.na(time_since_technical_problems),
+                   80))
+data=data %>% 
+  mutate(MISS_phone_price=is.na(phone_price),MISS_voice_minutes=is.na(voice_minutes))
+test=test %>% 
+  mutate(MISS_phone_price=is.na(phone_price),MISS_voice_minutes=is.na(voice_minutes))
+
+data$MISS_phone_price = as.integer(data$MISS_phone_price)
+test$MISS_phone_price = as.integer(test$MISS_phone_price)
+
+data$MISS_voice_minutes = as.integer(data$MISS_voice_minutes)
+test$MISS_voice_minutes = as.integer(test$MISS_voice_minutes)
+
+data = data %>%
+  mutate(phone_price
+         = replace(phone_price,
+                   is.na(phone_price),
+                   0))
+
+data = data %>%
+  mutate(voice_minutes
+         = replace(voice_minutes,
+                   is.na(voice_minutes),
+                   0))
+test = test %>%
+  mutate(phone_price
+         = replace(phone_price,
+                   is.na(phone_price),
+                   0))
+test = test %>%
+  mutate(voice_minutes
+         = replace(voice_minutes,
+                   is.na(voice_minutes),
+                   0))
+
+#===== train-validation sets====
 trainID=sample(1:860000,588000)         
 train=data[trainID,]
 valid=data[-trainID,]
 
-train["time_since_data_overage_missing"] = 0
-train["time_since_overage_missing"] = 0
-train["time_since_complaints_missing"] = 0
-train["time_since_technical_problems_missing"] = 0
-
-
-train$time_since_data_overage_missing[train$time_since_data_overage == TRUE] <- 1  
-train$time_since_overage_missing[train$time_since_overage == TRUE] <- 1  
-train$time_since_complaints_missing[train$time_since_complaints == TRUE] <- 1  
-train$time_since_technical_problems_missing[train$time_since_technical_problems == TRUE] <- 1  
-
-
-train = train %>%
-  mutate(time_since_data_overage
-         = replace(time_since_data_overage,
-                   is.na(time_since_data_overage),
-                   mean(time_since_data_overage, na.rm = TRUE)))
-train = train %>%
-  mutate(time_since_overage
-         = replace(time_since_overage,
-                   is.na(time_since_overage),
-                   mean(time_since_overage, na.rm = TRUE)))
-train = train %>%
-  mutate(time_since_complaints
-         = replace(time_since_complaints,
-                   is.na(time_since_complaints),
-                   median(time_since_complaints, na.rm = TRUE)))
-train = train %>%
-  mutate(time_since_technical_problems
-         = replace(time_since_technical_problems,
-                   is.na(time_since_technical_problems),
-                   mean(time_since_technical_problems, na.rm = TRUE)))
-
-
-#validation set
-
-valid["time_since_data_overage_missing"] = 0
-valid["time_since_overage_missing"] = 0
-valid["time_since_complaints_missing"] = 0
-valid["time_since_technical_problems_missing"] = 0
-
-
-valid$time_since_data_overage_missing[valid$time_since_data_overage == TRUE] <- 1  
-valid$time_since_overage_missing[valid$time_since_overage == TRUE] <- 1  
-valid$time_since_complaints_missing[valid$time_since_complaints == TRUE] <- 1  
-valid$time_since_technical_problems_missing[valid$time_since_technical_problems == TRUE] <- 1  
-
-
-valid = valid %>%
-  mutate(time_since_data_overage
-         = replace(time_since_data_overage,
-                   is.na(time_since_data_overage),
-                   mean(time_since_data_overage, na.rm = TRUE)))
-valid = valid %>%
-  mutate(time_since_overage
-         = replace(time_since_overage,
-                   is.na(time_since_overage),
-                   mean(time_since_overage, na.rm = TRUE)))
-valid = valid %>%
-  mutate(time_since_complaints
-         = replace(time_since_complaints,
-                   is.na(time_since_complaints),
-                   median(time_since_complaints, na.rm = TRUE)))
-valid = valid %>%
-  mutate(time_since_technical_problems
-         = replace(time_since_technical_problems,
-                   is.na(time_since_technical_problems),
-                   mean(time_since_technical_problems, na.rm = TRUE)))
 #============== multiple imputation with miss Forest=====
 library(missForest)
 imputed <- missForest(train)
@@ -237,10 +268,6 @@ completedValid <- complete(tempValid,2)
 densityplot(tempValid)
 write.csv(completedValid,"/Users/sabadaftari/Downloads/completedValid.csv", row.names = FALSE)
 
-pboww=predict(bow,completedValid,type = 'prob')
-confusion(completedValid$churn_in_12,predict(bow,completedValid))
-pboww
-
 #--------------------- Test Imputation---------------------
 
 testt= subset(test,select = c(id,family_id,unique_id,unique_family,total_technical_problems,phone_balance,
@@ -257,4 +284,4 @@ str(completedTest)
 
 export3 = cbind(p,completedTest)[sort.list(p,decreasing=TRUE),]
 export3 = slice_head(export3,n = 3/10 * 1000000)
-write.csv(export3[c("unique_family")],"/Users/sabad/Downloads/CreditGameData/CreditGame.csv", row.names = FALSE)
+write.csv(export3[c("unique_family")],"/Users/sabad/Downloads/CreditGameData/CompletedTest.csv", row.names = FALSE)
