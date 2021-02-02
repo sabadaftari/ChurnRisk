@@ -1,2 +1,2 @@
 # ChurnRisk
-Set of assignments for course MATH60603
+For course MATH60603
